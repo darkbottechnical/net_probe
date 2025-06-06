@@ -1,5 +1,6 @@
 from ipaddress import (
     IPv4Address, 
+    IPv6Address,
     IPv4Network,
     ip_address
 )
@@ -56,14 +57,36 @@ class Host:
         self.last_seen = last_seen
         self.notes = []
 
+    def info(self, output: bool=False):
+        info = f"""
+HOST INFORMATION FOR {self.ip}
+  IPv4 Address: {self.ip}
+  MAC Address:  {self.mac}
+  HOSTNAME:     {self.hostname}
+  NBNS NAMES:   {", ".join(self.nbns)}
+  MDNS NAMES:   {", ".join(self.mdns)}
+  OPEN PORTS:   {", ".join(self.ports)}
+  LAST SEEN:    {self.last_seen}
+
+EXTRA NOTES AND INFO:
+  {"\n".join(self.notes)}
+
+"""
+        if output:
+            print(info)
+        else:
+            return output
+
     def summary(self, output: bool=False):
         """
         Returns a summary of the host's information.
         """
+        summary = f"{self.ip}\t{self.mac}\t{self.last_seen}\tNAME:{self.hostname}\tNBNS:{len(self.nbns)}\tMDNS:{len(self.mdns)}\tPORTS:{", ".join(self.ports)}"
+
         if output:
-            print(f"{self.ip}  {self.mac}  {self.last_seen}    {self.hostname} | NBNS: {self.nbns} | mDNS: {self.mdns} | Ports: {self.ports}")
+            print(summary)
         else:
-            return f"{self.ip}  {self.mac}  {self.last_seen}    {self.hostname} | NBNS: {self.nbns} | mDNS: {self.mdns} | Ports: {self.ports}"
+            return summary
 
 class Parsers:
     @staticmethod
@@ -107,8 +130,12 @@ class Parsers:
                     except Exception as e:
                         print(f"[!] Error parsing TXT answer: {e}")
                 # A/AAAA
-                elif rtype == 1 or rtype == 28:
-                    mdns.append(ans.rdata)
+                elif rtype == 28:
+                    try:
+                        ipv6 = "IPv6 Address: "+ans.rdata.decode()
+                    except Exception:
+                        ipv6 = "IPv6 Address: "+str(IPv6Address(ans.rdata))
+                    notes.append(ipv6)
 
             # Answers
             for i in range(dns.ancount):
@@ -161,7 +188,6 @@ class Probe:
 
         # thread pools
         self.packet_processors = ThreadPoolExecutor()
-        self.hostlist_updater = ThreadPoolExecutor()
 
     def toggle_stream(self) -> bool:
         """
@@ -291,16 +317,14 @@ class Probe:
             if packet.haslayer(DNS) and packet.haslayer(UDP) and (packet[UDP].sport == 5353 or packet[UDP].dport == 5353):
                 mdns, info = Parsers.parse_mdns(packet)
                 
-                sender.mdns.extend(mdns) # the bug happens here, once the mdns is parsed, it is added to the sender's mdns list but after that, every other packet processed will have the same mdns list regardless
+                sender.mdns.extend(mdns)
                 sender.notes.extend(info)
 
-            self.hostlist_updater.submit(self.add_host, sender)
-
             if IPv4Address(sender.ip) in IPv4Network(self.range):
-                self.hostlist_updater.submit(self.add_host, receiver)
+                self.add_host(sender)
 
             if IPv4Address(receiver.ip) in IPv4Network(self.range):
-                self.hostlist_updater.submit(self.add_host, receiver)
+                self.add_host(receiver)
 
         def _submit_process_packet(p):
             self.packet_processors.submit(process_packet, p)
@@ -371,7 +395,9 @@ class Probe:
         """
         from scapy.all import get_terminal_width
         print(f"Hosts in range {self.range} ({len(self.host_list)}):")
+        print("IP Address\tMAC Address\t\tLast Seen\tHostname\tNBNS\tMDNS\tPORTS")
         print("="*get_terminal_width())
+        
         for host in sorted(self.host_list, key=lambda i: ip_address(i.ip)):
             host.summary(output=True)
         print("="*get_terminal_width())
@@ -396,6 +422,11 @@ class Probe:
                 name_matches = False
                 for name in args.names.split(','):
                     name = name.strip().lower()
+
+                    if name == host.hostname:
+                        name_matches = True
+                        break
+                    
                     for n in host.nbns:
                         n_str = str(n).strip().lower().rstrip('.')
                         

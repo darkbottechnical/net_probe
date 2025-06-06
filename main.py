@@ -8,7 +8,7 @@ net_range = "0.0.0.0/0"
 aggression = 1
 probe = None
 
-search_parser = get_parser()
+
 session = PromptSession()
 
 def main():
@@ -58,10 +58,25 @@ def main():
                             print("[!] No Probe is running. Please start a probe first.")
                             continue
                         try:
+                            search_parser = get_parser()
                             args = search_parser.parse_args(command[1:])
                             probe.search(args)
                         except SystemExit:
                             continue
+
+                    elif command[0] == "info":
+                        if probe is None:
+                            print("[!] No Probe is running.")
+                            continue
+                        try:
+                            target_host = command[1]
+                        except IndexError:
+                            print("Usage: info <ip or mac address>")
+                        else:
+                            for host in probe.host_list:
+                                if host.ip == target_host or host.mac == target_host:
+                                    host.info(output=True)
+                                    break
 
                     elif command[0] == "set":
                         try:
