@@ -247,6 +247,9 @@ class Probe:
                 for p in host.ports:
                     if p not in host_exists.ports:
                         host_exists.ports.append(p)
+                for note in host.notes:
+                    if note not in host_exists.notes:
+                        host_exists.notes.append(note)
                 host_exists.last_seen = host.last_seen
             
     def nbns_probe(self):
