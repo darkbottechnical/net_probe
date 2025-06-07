@@ -85,7 +85,7 @@ HOST INFORMATION FOR {self.ip}
   HOSTNAME:     {self.hostname}
   NBNS NAMES:   {', '.join(self.nbns)}
   MDNS NAMES:   {', '.join(self.mdns)}
-  OPEN PORTS:   {', '.join(self.ports)}
+  OPEN PORTS:   {', '.join(str(p) for p in self.ports)}
   LAST SEEN:    {self.last_seen}
   PACKET COUNT: {self.packet_count}
 
@@ -102,7 +102,7 @@ EXTRA NOTES AND INFO:
         """
         Returns a summary of the host's information.
         """
-        summary = f"{self.ip}\t{self.mac}\t{self.last_seen}\tNAME:{self.hostname}\tNBNS:{len(self.nbns)}\tMDNS:{len(self.mdns)}\tPORTS:{", ".join(self.ports)}"
+        summary = f"{self.ip}\t{self.mac}\t{self.last_seen}\tNAME:{self.hostname}\tNBNS:{len(self.nbns)}\tMDNS:{len(self.mdns)}\tPORTS:{', '.join(str(p) for p in self.ports)}"
 
         if output:
             print(summary)
@@ -140,10 +140,8 @@ class Parsers:
         matched_services = set()
         if dns.qr == 1:
             # Answers
-        
             def parse_answer(ans):
                 rtype = ans.type
-
                 try:
                     rrname = ans.rrname.decode().rstrip('.')
                 except Exception:
@@ -164,6 +162,7 @@ class Parsers:
                         srv = ans.target.decode().rstrip('.')
                         port = ans.port
                         mdns.append(f"{srv}:{port}")
+                        ports.append(port)
                     except Exception:
                         port = ans.port
                         srv = str(ans.target)
@@ -172,17 +171,26 @@ class Parsers:
                 # TXT
                 elif rtype == 16:
                     try:
+                        txt_pairs = []
+                        highlights = []
                         for i in ans.rdata:
                             if isinstance(i, bytes):
-                                i = i.decode()
+                                i = i.decode(errors="replace")
+                            i = i.strip()
+                            if '=' in i:
+                                k, v = i.split('=', 1)
+                                k = k.strip().lower()
+                                v = v.strip()
+                                txt_pairs.append(f"    {k}: {v}")
+                                # Highlight common fields
+                                if k in ("model", "id", "deviceid", "fn", "product", "ty", "uuid", "md", "ver", "srcvers", "adminurl", "srvvers"):
+                                    highlights.append(f"      [*] {k}: {v}")
                             else:
-                                i = str(i)
-                            if i.split('=', 1)[0].strip() == 'model':
-                                notes.append(f"  Model: {i.split('=', 1)[1].strip()}")
-                            else:
-                                txt.append(i.strip())
-                        txt = [i for i in txt if i]  # Remove empty strings
-                        notes.append(f"  MDNS METADATA FOR {ans.rrname}\n\t"+"\n\t".join(txt))
+                                txt_pairs.append(f"    {i}")
+                        if highlights:
+                            notes.append(f"  HIGHLIGHTS FOR {ans.rrname}:\n" + "\n".join(highlights))
+                        if txt_pairs:
+                            notes.append(f"  MDNS TXT RECORD FOR {ans.rrname}:\n" + "\n".join(txt_pairs))
                     except Exception as e:
                         print(f"[!] Error parsing TXT answer: {e}")
                 # AAAA
@@ -196,13 +204,12 @@ class Parsers:
             # Answers
             for i in range(dns.ancount):
                 parse_answer(dns.an[i])
-                        
             # Authority
             for i in range(dns.nscount):
                 parse_answer(dns.ns[i])
             # Additional
             for i in range(dns.arcount):
-                parse_answer(dns.ar[i])     
+                parse_answer(dns.ar[i])
 
             for service in mdns:
                 service_lc = service.lower()
