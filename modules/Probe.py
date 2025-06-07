@@ -100,10 +100,18 @@ EXTRA NOTES AND INFO:
 
     def summary(self, output: bool=False):
         """
-        Returns a summary of the host's information.
+        Returns a summary of the host's information with aligned columns.
         """
-        summary = f"{self.ip}\t{self.mac}\t{self.last_seen}\t{self.hostname}\tNBNS:{len(self.nbns)}\tMDNS:{len(self.mdns)}\tPORTS:{', '.join(str(p) for p in self.ports)}"
-
+        summary = (
+            f"{self.ip:<15} "
+            f"{self.mac:<20} "
+            f"{self.vendor:<30} "
+            f"{str(self.last_seen):<18} "
+            f"{str(self.hostname):<30} "
+            f"NBNS:{len(self.nbns):<5} "
+            f"MDNS:{len(self.mdns):<5} "
+            f"PORTS:{', '.join(str(p) for p in self.ports)}"
+        )
         if output:
             print(summary)
         else:
@@ -138,6 +146,8 @@ class Parsers:
         notes = []
         ports = []
         matched_services = set()
+        clean_hostname = None
+
         if dns.qr == 1:
             # Answers
             def parse_answer(ans):
@@ -218,14 +228,17 @@ class Parsers:
                         notes.append(f"    Service Running: {label} ({key})")
                         matched_services.add(key)
 
-            clean_hostname = None
+            # Extract clean hostname
             for name in mdns:
-                if name.lower().endswith('.local') or name.lower().endswith('.local.'):
-                    parts = name.split('.')
-                    for part in parts:
-                        if part and not part.startswith('_') and not part.startswith('.local'):
-                            clean_hostname = part
+                if name.lower().endswith('.local') and not name.startswith('_'):
+                    is_service = False
+                    for key in Parsers.COMMON_SERVICES:
+                        if name.lower() == key:
+                            is_service = True
                             break
+                    if not is_service:
+                        clean_hostname = name.split(':')[0].split('.', 1)[0]
+                        break
 
         return mdns, notes, ports, clean_hostname
     
@@ -326,7 +339,7 @@ class Probe:
             else:
                 if host_exists.mac != host.mac:
                     host_exists.mac = host.mac
-                if host_exists.hostname != host.hostname:
+                if host_exists.hostname != host.hostname and host.hostname != "N/A":
                     host_exists.hostname = host.hostname
                 for n in host.nbns:
                     if n not in host_exists.nbns:
@@ -348,7 +361,10 @@ class Probe:
 
         req = IP(dst=BROADCAST_ADDR)/UDP(sport=NBNS_PORT, dport=NBNS_PORT)/NBNSHeader()/NBNSNodeStatusRequest()
         while not self.stop_event.is_set():
-            send(req, verbose=False)
+            if self.iface:
+                send(req, verbose=False, iface=self.iface)
+            else:
+                send(req, verbose=False)
             print("[nbns_probe] NBNS Probe sent.")
             sleep(rand(self.aggrlv*5, self.aggrlv*10))
 
@@ -364,7 +380,10 @@ class Probe:
         packet = IP(dst=MDNS_ADDR)/UDP(dport=MDNS_PORT, sport=MDNS_PORT)/query
 
         while not self.stop_event.is_set():
-            send(packet, verbose=False)
+            if self.iface:
+                send(packet, verbose=False, iface=self.iface)
+            else:
+                send(packet, verbose=False)
             self.event_stream_log("[mdns_probe] Sent mDNS probe for _services._dns-sd._udp.local")
             sleep(rand(self.aggrlv*5, self.aggrlv *10)) 
             
@@ -413,6 +432,7 @@ class Probe:
                 sender.notes.extend(info)
                 sender.ports.extend(ports)
 
+                # Update hostname only if clean_hostname is valid and sender.hostname is empty or "N/A"
                 if clean_hostname and (not sender.hostname or sender.hostname == "N/A"):
                     sender.hostname = clean_hostname
 
@@ -497,12 +517,12 @@ class Probe:
         """
         from scapy.all import get_terminal_width
         print(f"Hosts in range {self.range} ({len(self.host_list)}):")
-        print("IP Address\tMAC Address\t\tLast Seen\tHostname\tNBNS\tMDNS\tPORTS")
-        print("="*get_terminal_width())
-        
+        # Aligned header
+        print(f"{'IP Address':<15} {'MAC Address':<20} {'MAC Vendor':<30} {'Last Seen':<19} {'Hostname':<31} {'NBNS':<10} {'MDNS':<10} PORTS")
+        print("=" * get_terminal_width())
         for host in sorted(self.host_list, key=lambda i: ip_address(i.ip)):
             host.summary(output=True)
-        print("="*get_terminal_width())
+        print("=" * get_terminal_width())
         print(f"Total hosts: {len(self.host_list)}")
 
     def search(self, args):
@@ -561,8 +581,9 @@ class Probe:
 
         if found_hosts:
             print(f"Found {len(found_hosts)} matching hosts:")
-            print("IP Address\tMAC Address\t\tLast Seen\tHostname\tNBNS\tMDNS\tPORTS")
+
             from scapy.all import get_terminal_width
+            print(f"{'IP Address':<15} {'MAC Address':<20} {'MAC Vendor':<30}{'Last Seen':<18} {'Hostname':<30} {'NBNS':<10} {'MDNS':<10} PORTS")
             print("="*get_terminal_width())
             for host in found_hosts:
                 host.summary(output=True)
