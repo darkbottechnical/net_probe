@@ -102,7 +102,7 @@ EXTRA NOTES AND INFO:
         """
         Returns a summary of the host's information.
         """
-        summary = f"{self.ip}\t{self.mac}\t{self.last_seen}\tNAME:{self.hostname}\tNBNS:{len(self.nbns)}\tMDNS:{len(self.mdns)}\tPORTS:{', '.join(str(p) for p in self.ports)}"
+        summary = f"{self.ip}\t{self.mac}\t{self.last_seen}\t{self.hostname}\tNBNS:{len(self.nbns)}\tMDNS:{len(self.mdns)}\tPORTS:{', '.join(str(p) for p in self.ports)}"
 
         if output:
             print(summary)
@@ -221,10 +221,11 @@ class Parsers:
             clean_hostname = None
             for name in mdns:
                 if name.lower().endswith('.local') or name.lower().endswith('.local.'):
-                    base = name.split('.', 1)[0]
-                    if base and not base.startswith('_'):
-                        clean_hostname = base
-                        break
+                    parts = name.split('.')
+                    for part in parts:
+                        if part and not part.startswith('_') and not part.startswith('.local'):
+                            clean_hostname = part
+                            break
 
         return mdns, notes, ports, clean_hostname
     
@@ -453,7 +454,7 @@ class Probe:
 
 
     def aggressive_scan(self):
-        #copy code from swordfish
+        # coming eventually
         pass
 
     def start(self):
