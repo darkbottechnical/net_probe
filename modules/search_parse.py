@@ -47,4 +47,11 @@ def get_parser():
         metavar="PORTS",
         help="Ports to filter packets and hosts."
     )
+    search_parser.add_argument(
+        "-e", "--extra-notes",
+        type=str,
+        required=False,
+        metavar="NOTES",
+        help="Extra notes to filter packets and hosts."
+    )
     return search_parser

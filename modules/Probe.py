@@ -511,7 +511,7 @@ class Probe:
         Args:
             args: Parsed arguments from the command line.
         """
-        print(f"Searching {len(self.host_list)} hosts in range {self.range} with parameters: {args}")
+        self.event_stream_log(f"[+] Searching {len(self.host_list)} hosts in range {self.range} with parameters: {args}")
         found_hosts = []
 
         for host in self.host_list:
@@ -546,12 +546,25 @@ class Probe:
                     continue
             if args.ports and not any(port in host.ports for port in map(int, args.ports.split(','))):
                 continue
+            if args.extra_notes:
+                notes_matches = False
+                for note in args.extra_notes.split(','):
+                    note = note.strip().lower()
+                    if any(note in n.lower() for n in host.notes):
+                        notes_matches = True
+                        break
+                if not notes_matches:
+                    continue
 
             found_hosts.append(host)
 
         if found_hosts:
-            
+            print(f"Found {len(found_hosts)} matching hosts:")
+            print("IP Address\tMAC Address\t\tLast Seen\tHostname\tNBNS\tMDNS\tPORTS")
+            from scapy.all import get_terminal_width
+            print("="*get_terminal_width())
             for host in found_hosts:
                 host.summary(output=True)
+            print("="*get_terminal_width())
         else:
             print("No matching hosts found.")

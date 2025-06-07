@@ -104,7 +104,17 @@ def main():
                     elif command[0] == "params":
                         print("range: n ip range in cidr notation to filter packets and hosts.\naggression: an integer representing the level of aggression.\n\t0-1: only run passive sniffing\n\t2: run mdns and nbns probes. \n\t3+: actively probe hosts.")
                     elif command[0] == "help":
-                        pass
+                        print("Available commands:")
+                        print("  start - Start the network probe")
+                        print("  stop - Stop the network probe")
+                        print("  stream - Toggle stream logging")
+                        print("  lsh, listhosts - List discovered hosts")
+                        print("  search - Search for hosts based on criteria")
+                        print("  info <ip or mac address> - Get information about a specific host")
+                        print("  set <parameter> <value> - Set parameters for the probe (e.g., range, aggression)")
+                        print("  params - Show available parameters and their descriptions")
+                        print("  help - Show this help message")
+                        print("  exit, quit - Exit the program")
                     else:
                         print("Unknown command. Type 'help' for a list of commands.")
             except KeyboardInterrupt:
