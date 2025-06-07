@@ -55,18 +55,23 @@ class Host:
         self.mdns = mdns if mdns is not None else []
         self.ports = ports if ports is not None else []
         self.last_seen = last_seen
+        self.vendor = "N/A"
         self.notes = []
+        self.packet_count = 0
 
     def info(self, output: bool=False):
         info = f"""
 HOST INFORMATION FOR {self.ip}
-  IPv4 Address: {self.ip}
-  MAC Address:  {self.mac}
+  IPV4 ADDRESS: {self.ip}
+  MAC 
+    ADDRESS:  {self.mac}
+    VENDOR:      {self.vendor}
   HOSTNAME:     {self.hostname}
-  NBNS NAMES:   {", ".join(self.nbns)}
-  MDNS NAMES:   {", ".join(self.mdns)}
-  OPEN PORTS:   {", ".join(self.ports)}
+  NBNS NAMES:   {', '.join(self.nbns)}
+  MDNS NAMES:   {', '.join(self.mdns)}
+  OPEN PORTS:   {', '.join(self.ports)}
   LAST SEEN:    {self.last_seen}
+  PACKET COUNT: {self.packet_count}
 
 EXTRA NOTES AND INFO:
   {"\n".join(self.notes)}
@@ -89,11 +94,34 @@ EXTRA NOTES AND INFO:
             return summary
 
 class Parsers:
+
+    COMMON_SERVICES = {
+        "_airplay._tcp.local": "Apple AirPlay",
+        "_raop._tcp.local": "AirPlay Audio (RAOP)",
+        "_spotify-connect._tcp.local": "Spotify Connect",
+        "_dosvc._tcp.local": "Device Offline Service (Windows DOSvc)",
+        "_googlecast._tcp.local": "Google Cast (Chromecast)",
+        "_ipp._tcp.local": "Internet Printer (IPP)",
+        "_ippusb._tcp.local": "USB Printer (IPP over USB)",
+        "_homekit._tcp.local": "Apple HomeKit Accessory",
+        "_ssh._tcp.local": "SSH Service",
+        "_smb._tcp.local": "Windows File Sharing (SMB)",
+        "_afpovertcp._tcp.local": "Apple File Sharing (AFP)",
+        "_workstation._tcp.local": "Workstation Presence",
+        "_http._tcp.local": "HTTP Web Server",
+        "_ftp._tcp.local": "FTP File Transfer",
+        "_hap._tcp.local": "HomeKit Accessory Protocol",
+        "_services._dns-sd._udp.local": "mDNS Service Discovery",
+    }
+
+
     @staticmethod
     def parse_mdns(packet):
         dns = packet[DNS]
         mdns = []
         notes = []
+        ports = []
+        matched_services = set()
         if dns.qr == 1:
             # Answers
         
@@ -113,6 +141,7 @@ class Parsers:
                     except Exception:
                         ptr = str(ans.rdata)
                     mdns.append(ptr)
+
                 # SRV
                 elif rtype == 33:
                     try:
@@ -120,21 +149,23 @@ class Parsers:
                         port = ans.port
                         mdns.append(f"{srv}:{port}")
                     except Exception:
+                        port = ans.port
                         srv = str(ans.target)
-                        mdns.append(ans.rdata)
+                        mdns.append(f"{srv}:{port}")
+                        ports.append(port)
                 # TXT
                 elif rtype == 16:
                     try:
                         txt = [i.decode() for i in ans.rdata]
-                        notes.extend(txt)
+                        notes.append(f"  MDNS METADATA FOR {ans.rrname}\n\t"+"\n\t".join(txt))
                     except Exception as e:
                         print(f"[!] Error parsing TXT answer: {e}")
-                # A/AAAA
+                # AAAA
                 elif rtype == 28:
                     try:
-                        ipv6 = "IPv6 Address: "+ans.rdata.decode()
+                        ipv6 = "    IPv6 Address: "+ans.rdata.decode()
                     except Exception:
-                        ipv6 = "IPv6 Address: "+str(IPv6Address(ans.rdata))
+                        ipv6 = "    IPv6 Address: "+str(IPv6Address(ans.rdata))
                     notes.append(ipv6)
 
             # Answers
@@ -147,7 +178,23 @@ class Parsers:
             # Additional
             for i in range(dns.arcount):
                 parse_answer(dns.ar[i])     
-        return mdns, notes
+
+            for service in mdns:
+                service_lc = service.lower()
+                for key, label in Parsers.COMMON_SERVICES.items():
+                    if key in service_lc and key not in matched_services:
+                        notes.append(f"    Service Running: {label} ({key})")
+                        matched_services.add(key)
+
+            clean_hostname = None
+            for name in mdns:
+                if name.lower().endswith('.local') or name.lower().endswith('.local.'):
+                    base = name.split('.', 1)[0]
+                    if base and not base.startswith('_'):
+                        clean_hostname = base
+                        break
+
+        return mdns, notes, ports, clean_hostname
     
     @staticmethod
     def parse_nbns(packet):
@@ -318,16 +365,25 @@ class Probe:
                 sender.nbns.extend(nbns)
 
             if packet.haslayer(DNS) and packet.haslayer(UDP) and (packet[UDP].sport == 5353 or packet[UDP].dport == 5353):
-                mdns, info = Parsers.parse_mdns(packet)
-                
+                mdns, info, ports, clean_hostname = Parsers.parse_mdns(packet)
                 sender.mdns.extend(mdns)
                 sender.notes.extend(info)
+                sender.ports.extend(ports)
+
+                if clean_hostname and (not sender.hostname or sender.hostname == "N/A"):
+                    sender.hostname = clean_hostname
 
             if IPv4Address(sender.ip) in IPv4Network(self.range):
                 self.add_host(sender)
+                # Increment packet count for sender
+                if hasattr(self, '_host_index') and sender.ip in self._host_index:
+                    self._host_index[sender.ip].packet_count += 1
 
             if IPv4Address(receiver.ip) in IPv4Network(self.range):
                 self.add_host(receiver)
+                # Increment packet count for receiver
+                if hasattr(self, '_host_index') and receiver.ip in self._host_index:
+                    self._host_index[receiver.ip].packet_count += 1
 
         def _submit_process_packet(p):
             self.packet_processors.submit(process_packet, p)
