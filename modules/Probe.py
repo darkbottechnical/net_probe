@@ -138,6 +138,30 @@ class Parsers:
         "_services._dns-sd._udp.local": "mDNS Service Discovery",
     }
 
+    @staticmethod
+    def parse_arp_cache():
+        import subprocess
+        import platform
+
+        os = platform.system().lower()
+
+        if os == "windows":
+            arp_cache = subprocess.run(["arp", "-a"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
+            pairs = [pair.split() for pair in arp_cache.split('\n')]
+
+            for pair in pairs:
+                if len(pair) == 3:
+                    return pair[0], pair[1]
+
+        elif os == "linux":
+            arp_cache = subprocess.run(["arp"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout
+            rows = [row.split() for row in arp_cache.split('\n')]
+
+            for row in rows:
+                if len(row) == 5:
+                    return row[0], row[2]
+        else:
+            print("Sorry, your platform isn't supported by this script. Please notify the author if you want it to be because he is lazy.")
 
     @staticmethod
     def parse_mdns(packet):
@@ -388,6 +412,7 @@ class Probe:
             sleep(rand(self.aggrlv*5, self.aggrlv *10)) 
             
 
+
     def passive_scanner(self):
         """
         Starts an scapy.sendrcv.AsyncSniffer instance to capture and process packets.
@@ -409,6 +434,7 @@ class Probe:
                 sender.mac = ether.src
                 receiver.mac = ether.dst
         
+
 
             if packet.haslayer(ARP):
                 arp = packet[ARP]
