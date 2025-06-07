@@ -32,6 +32,8 @@ from scapy.sendrecv import (
     AsyncSniffer
 )
 
+from modules.oui_dict import OUI_DICT
+
 # Host object
 class Host:
     """
@@ -46,6 +48,11 @@ class Host:
         mdns: list of strings representing the mDNS names of the host, defaults to an empty list.
         ports: list of integers representing the open ports of the host, defaults to an empty list.
 
+    Attributes after initialization:
+        vendor: string object representing the vendor of the host, defaults to "N/A".
+        notes: list of strings for any extra notes about the host, defaults to an empty list.
+        packet_count: integer representing the number of packets seen from this host, defaults to 0.
+
     """
     def __init__(self, ip: str, mac: str, last_seen, hostname: str="N/A", nbns=None, mdns=None, ports=None):
         self.ip = ip
@@ -55,9 +62,18 @@ class Host:
         self.mdns = mdns if mdns is not None else []
         self.ports = ports if ports is not None else []
         self.last_seen = last_seen
-        self.vendor = "N/A"
         self.notes = []
         self.packet_count = 0
+
+    @property
+    def vendor(self):
+        if self.mac:
+            import re
+            mac_clean = re.sub(r'[^0-9A-Fa-f]', '', self.mac).upper()
+            if len(mac_clean) >= 6:
+                oui = mac_clean[:6]
+                return OUI_DICT.get(oui, "N/A")
+        return "N/A"
 
     def info(self, output: bool=False):
         info = f"""
@@ -80,7 +96,7 @@ EXTRA NOTES AND INFO:
         if output:
             print(info)
         else:
-            return output
+            return info
 
     def summary(self, output: bool=False):
         """
@@ -221,6 +237,16 @@ class Probe:
         iface: a string for the network interface to use with scapy's AsyncSniffer. (e.g. wlan0) Can be left blank.
         aggrlv: an integer that is either 1, 2, or 3, representing the aggression level of the probe, which is determined
             upon initialising an instance and affects what the start() function does.
+
+    Attributes after initialization:
+        range: an IPv4Network object representing the network range.
+        aggrlv: an integer representing the aggression level.
+        host_list: a list of Host objects representing the hosts found in the network.
+        host_list_lock: a threading.Lock object to manage access to host_list.
+        stop_event: a threading.Event object to signal when to stop scanning.
+        stream: a boolean indicating whether to print event logs to the console.
+        running: a boolean indicating whether the probe is currently running.
+        iface: a string representing the network interface to use for packet sniffing.
 
     """
     def __init__(self, n_range: str, aggrlv: int, iface: str = "Wi-Fi", stream: bool = True):
