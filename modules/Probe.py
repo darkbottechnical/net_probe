@@ -115,7 +115,7 @@ class Parsers:
         "_airplay._tcp.local": "Apple AirPlay",
         "_raop._tcp.local": "AirPlay Audio (RAOP)",
         "_spotify-connect._tcp.local": "Spotify Connect",
-        "_dosvc._tcp.local": "Device Offline Service (Windows DOSvc)",
+        "_dosvc._tcp.local": "Windows Delivery Optimization Service (DOSVC)",
         "_googlecast._tcp.local": "Google Cast (Chromecast)",
         "_ipp._tcp.local": "Internet Printer (IPP)",
         "_ippusb._tcp.local": "USB Printer (IPP over USB)",
@@ -172,7 +172,16 @@ class Parsers:
                 # TXT
                 elif rtype == 16:
                     try:
-                        txt = [i.decode() for i in ans.rdata]
+                        for i in ans.rdata:
+                            if isinstance(i, bytes):
+                                i = i.decode()
+                            else:
+                                i = str(i)
+                            if i.split('=', 1)[0].strip() == 'model':
+                                notes.append(f"  Model: {i.split('=', 1)[1].strip()}")
+                            else:
+                                txt.append(i.strip())
+                        txt = [i for i in txt if i]  # Remove empty strings
                         notes.append(f"  MDNS METADATA FOR {ans.rrname}\n\t"+"\n\t".join(txt))
                     except Exception as e:
                         print(f"[!] Error parsing TXT answer: {e}")
