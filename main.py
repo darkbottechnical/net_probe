@@ -1,5 +1,5 @@
 from modules.Probe import Probe
-from modules.search_parse import get_parser
+from modules.parsers.search_parse import get_parser
 from threading import Thread
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
