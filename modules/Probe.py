@@ -98,20 +98,41 @@ EXTRA NOTES AND INFO:
         else:
             return info
 
-    def summary(self, output: bool=False):
+    def summary(self, output: bool=False, col_widths=None):
         """
         Returns a summary of the host's information with aligned columns.
+        If col_widths is provided, uses those widths for each column.
         """
-        summary = (
-            f"{self.ip:<15} "
-            f"{self.mac:<20} "
-            f"{self.vendor:<30} "
-            f"{str(self.last_seen):<18} "
-            f"{str(self.hostname):<30} "
-            f"NBNS:{len(self.nbns):<5} "
-            f"MDNS:{len(self.mdns):<5} "
-            f"PORTS:{', '.join(str(p) for p in self.ports)}"
-        )
+        fields = [
+            self.ip or '',
+            self.mac or '',
+            self.vendor or '',
+            str(self.last_seen) or '',
+            str(self.hostname) or '',
+            str(len(self.nbns)),
+            str(len(self.mdns)),
+            ', '.join(str(p) for p in self.ports)
+        ]
+        if col_widths:
+            # Truncate fields that are too long for their column
+            display_fields = []
+            for i, field in enumerate(fields):
+                if len(field) > col_widths[i] - 1:
+                    display_fields.append(field[:col_widths[i]-4] + '...')
+                else:
+                    display_fields.append(field)
+            summary = ''.join(f"{display_fields[i]:<{col_widths[i]}}" for i in range(len(fields)))
+        else:
+            summary = (
+                f"{self.ip:<15} "
+                f"{self.mac:<20} "
+                f"{self.vendor:<30} "
+                f"{str(self.last_seen):<18} "
+                f"{str(self.hostname):<30} "
+                f"NBNS:{len(self.nbns):<5} "
+                f"MDNS:{len(self.mdns):<5} "
+                f"PORTS:{', '.join(str(p) for p in self.ports)}"
+            )
         if output:
             print(summary)
         else:
@@ -539,16 +560,48 @@ class Probe:
 
     def show(self):
         """
-        prints the host list in a formatted manner.
+        Prints the host list in a dynamically formatted table based on content width.
+        Truncates columns if content is too wide for the terminal.
         """
         from scapy.all import get_terminal_width
-        print(f"Hosts in range {self.range} ({len(self.host_list)}):")
-        # Aligned header
-        print(f"{'IP Address':<15} {'MAC Address':<20} {'MAC Vendor':<30} {'Last Seen':<19} {'Hostname':<31} {'NBNS':<10} {'MDNS':<10} PORTS")
-        print("=" * get_terminal_width())
+        headers = [
+            ("IP Address", lambda h: h.ip or ""),
+            ("MAC Address", lambda h: h.mac or ""),
+            ("MAC Vendor", lambda h: h.vendor or ""),
+            ("Last Seen", lambda h: str(h.last_seen) or ""),
+            ("Hostname", lambda h: str(h.hostname) or ""),
+            ("NBNS", lambda h: str(len(h.nbns))),
+            ("MDNS", lambda h: str(len(h.mdns))),
+            ("PORTS", lambda h: ', '.join(str(p) for p in h.ports)),
+        ]
+        # Calculate max width for each column
+        col_widths = []
+        for idx, (header, getter) in enumerate(headers):
+            max_content = max([len(getter(h)) for h in self.host_list] + [len(header)])
+            col_widths.append(max_content + 2)
+        # Adjust total width to fit terminal
+        term_width = get_terminal_width()
+        total_width = sum(col_widths)
+        if total_width > term_width:
+            # Proportionally shrink columns, but keep a minimum width
+            min_widths = [8, 10, 10, 10, 10, 5, 5, 8]
+            excess = total_width - term_width
+            for i in range(len(col_widths)):
+                reducible = col_widths[i] - min_widths[i]
+                if reducible > 0 and excess > 0:
+                    reduction = min(reducible, excess)
+                    col_widths[i] -= reduction
+                    excess -= reduction
+                if excess <= 0:
+                    break
+        # Print header
+        header_line = ''.join(f"{header:<{col_widths[i]}}" for i, (header, _) in enumerate(headers))
+        print(header_line)
+        print("=" * min(term_width, sum(col_widths)))
+        # Print each host
         for host in sorted(self.host_list, key=lambda i: ip_address(i.ip)):
-            host.summary(output=True)
-        print("=" * get_terminal_width())
+            host.summary(output=True, col_widths=col_widths)
+        print("=" * min(term_width, sum(col_widths)))
         print(f"Total hosts: {len(self.host_list)}")
 
     def search(self, args):
@@ -558,6 +611,7 @@ class Probe:
         Args:
             args: Parsed arguments from the command line.
         """
+        from scapy.all import get_terminal_width
         self.event_stream_log(f"[+] Searching {len(self.host_list)} hosts in range {self.range} with parameters: {args}")
         found_hosts = []
 
@@ -608,11 +662,48 @@ class Probe:
         if found_hosts:
             print(f"Found {len(found_hosts)} matching hosts:")
 
-            from scapy.all import get_terminal_width
-            print(f"{'IP Address':<15} {'MAC Address':<20} {'MAC Vendor':<30}{'Last Seen':<18} {'Hostname':<30} {'NBNS':<10} {'MDNS':<10} PORTS")
-            print("="*get_terminal_width())
+            headers = [
+                ("IP Address", lambda h: h.ip or ""),
+                ("MAC Address", lambda h: h.mac or ""),
+                ("MAC Vendor", lambda h: h.vendor or ""),
+                ("Last Seen", lambda h: str(h.last_seen) or ""),
+                ("Hostname", lambda h: str(h.hostname) or ""),
+                ("NBNS", lambda h: str(len(h.nbns))),
+                ("MDNS", lambda h: str(len(h.mdns))),
+                ("PORTS", lambda h: ', '.join(str(p) for p in h.ports)),
+            ]
+
+            # Calculate max width for each column
+            col_widths = []
+            for idx, (header, getter) in enumerate(headers):
+                max_content = max([len(getter(h)) for h in found_hosts] + [len(header)])
+                col_widths.append(max_content + 2)
+
+            # Adjust total width to fit terminal
+            term_width = get_terminal_width()
+            total_width = sum(col_widths)
+            if total_width > term_width:
+                # Proportionally shrink columns, but keep a minimum width
+                min_widths = [8, 10, 10, 10, 10, 5, 5, 8]
+                excess = total_width - term_width
+                for i in range(len(col_widths)):
+                    reducible = col_widths[i] - min_widths[i]
+                    if reducible > 0 and excess > 0:
+                        reduction = min(reducible, excess)
+                        col_widths[i] -= reduction
+                        excess -= reduction
+                    if excess <= 0:
+                        break
+
+            # Print header
+            header_line = ''.join(f"{header:<{col_widths[i]}}" for i, (header, _) in enumerate(headers))
+            print(header_line)
+            print("=" * min(term_width, sum(col_widths)))
+
+            # Print each host
             for host in found_hosts:
-                host.summary(output=True)
-            print("="*get_terminal_width())
+                host.summary(output=True, col_widths=col_widths)
+
+            print("=" * min(term_width, sum(col_widths)))
         else:
             print("No matching hosts found.")
