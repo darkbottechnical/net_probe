@@ -1,6 +1,6 @@
 from argparse import ArgumentParser
 
-def get_parser():
+def get_search_parser():
     """
     Returns the ArgumentParser object for the Necronomicon Network Probe.
 

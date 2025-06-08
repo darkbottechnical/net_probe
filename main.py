@@ -1,5 +1,5 @@
 from modules.Probe import Probe
-from modules.parsers.search_parse import get_parser
+from modules.parsers.command_parsers import get_search_parser
 from threading import Thread
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
@@ -58,7 +58,7 @@ def main():
                             print("[!] No Probe is running. Please start a probe first.")
                             continue
                         try:
-                            search_parser = get_parser()
+                            search_parser = get_search_parser()
                             args = search_parser.parse_args(command[1:])
                             probe.search(args)
                         except SystemExit:
