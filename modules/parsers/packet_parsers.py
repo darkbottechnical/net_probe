@@ -55,7 +55,6 @@ class Parsers:
 
                 # if the record is an AAAA record, it won't be a service, so just make note of the ipv6 address
                 if rtype == 28:
-                    print("AAAA Record")
                     try:
                         v6addr = ans.rdata.decode()
                     except Exception:
@@ -66,7 +65,6 @@ class Parsers:
                 # otherwise, it should be a record of a service.
                 else:
                     # construct a dict to organise service information (sort of)
-                    print("Not AAAA")
                     service = {
                         "name": rrname,
                         "metadata": []
@@ -130,11 +128,9 @@ class Parsers:
                                 service.get("metadata").append(f"{key}: {value}") # add pair to metadata.
                     
                         except Exception as e:
-                            print(f"[!] Error parsing TXT field. {e}")
-                    print(service)
+                            print(f"[!] Error parsing TXT field. {e}")  
                     services.append(service)
             
-            print("starting parsing")
 
             for i in range(dns.ancount):
                 parse_field(dns.an[i])

@@ -129,24 +129,27 @@ class Probe:
                     if p not in host_exists.ports:
                         host_exists.ports.append(p)
                 existing_service = None
-                for s in host.services: # for every service in the new host's services,
-                    for es in host_exists.services: 
-                        if s.get("name") == es.get("name"): # compare its name to every service the existing host has
-                            existing_service = es.get("name") # if a service already exists with that name, 
-                            for md in s.get("metadata"): # for every piece of metadata in the new host
+                for new_service in host.services: # for every service in the new host's services,
+                    for _existing_service in host_exists.services: 
+                        if new_service.get("name") == _existing_service.get("name"): # compare its name to every service the existing host has
+                            existing_service = _existing_service.get("name") # if a service already exists with that name, 
+                            for metadata_pair in new_service.get("metadata"): # for every piece of metadata in the new host
                                 key_exists = False
-                                for emd in es.get("metadata"): # compare it to all metadata in existing service
-                                    key, value = md.split(": ")
-                                    ekey, evalue = emd.split(": ")
+                                for existing_metadata_pair in _existing_service.get("metadata"): # compare it to all metadata in existing service
+                                    key, value = metadata_pair.split(": ")
+                                    ekey, evalue = existing_metadata_pair.split(": ")
                                     if key == ekey: # if the keys are equal
+                                        print(f"[DEBUG] {key} already exists: {ekey}")
                                         key_exists = True
-                                        host_exists.services[host_exists.services.index(es)].get("metadata")[
-                                            host_exists.services[host_exists.services.index(es)].get("metadata").index(emd)
+                                        host_exists.services[host_exists.services.index(_existing_service)].get("metadata")[
+                                            host_exists.services[host_exists.services.index(_existing_service)].get("metadata").index(existing_metadata_pair)
                                         ] = f"{key}: {value}" # update the value
                                     if key_exists == False : # if the new metadata's key doesnt already exist
-                                        host_exists.services[host_exists.services.index(es)].get("metadata").append(md) # add the metadata                 
+                                        
+                                        print(f"[DEBUG] key {key} is new.")
+                                        host_exists.services[host_exists.services.index(_existing_service)].get("metadata").append(metadata_pair) # add the metadata                 
                     if not existing_service:
-                        host_exists.services.append(s)
+                        host_exists.services.append(new_service)
                 for note in host.notes:
                     if note not in host_exists.notes:
                         host_exists.notes.append(note)
