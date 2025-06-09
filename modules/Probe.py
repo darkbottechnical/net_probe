@@ -249,7 +249,8 @@ class Probe:
                     self._host_index[receiver.ip].packet_count += 1
 
         def _submit_process_packet(p):
-            self.packet_processors.submit(process_packet, p)
+            #self.packet_processors.submit(process_packet, p)
+            Thread(target=process_packet, args=[p], daemon=True).start()
         
         print(f"[+] Starting passive scanner on for range {self.range} at aggression level {self.aggrlv}.")
         sniffer_args = {

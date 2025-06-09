@@ -42,7 +42,8 @@ class Parsers:
         notes = []
         clean_hostname = None
 
-        if dns.qr == 1 and (int(dns.ancount)+int(dns.nscount)+int(dns.arcount) > 0):
+        if dns.qr == 1:
+            print("DEBUG: Parsing fields")
             def parse_field(ans):
                 """Function to extract information from a packet's DNS layer."""
                 try:
@@ -51,8 +52,11 @@ class Parsers:
                     rrname = str(ans.rrname)
                 mdns_names.append(rrname) # always add rrname to mdns_names list
 
+                rtype = ans.type
+
                 # if the record is an AAAA record, it won't be a service, so just make note of the ipv6 address
                 if rtype == 28:
+                    print("AAAA Record")
                     try:
                         v6addr = ans.rdata.decode()
                     except Exception:
@@ -63,6 +67,7 @@ class Parsers:
                 # otherwise, it should be a record of a service.
                 else:
                     # construct a dict to organise service information (sort of)
+                    print("Not AAAA")
                     service = {
                         "name": rrname,
                         "metadata": []
@@ -70,14 +75,14 @@ class Parsers:
 
                     is_known_service = False
                     service_attr_data = None
-                    rtype = ans.type
+                    
 
                     # find whether the service is in the known services database.
                     for name, data in SERVICE_DB.items():
                         if name in rrname:
                             is_known_service: bool = True # if it is, set the boolean to true,
-                            service.set("name", data.get("fn")) # set the service name to the stored friendly name (fn)
-                            service_attr_data: dict = data # and store the known friendly metadata keys.
+                            service["name"] = data.get("fn") # set the service name to the stored friendly name (fn)
+                            service_attr_data = data # and store the known friendly metadata keys.
 
                     # PTR (Pointer Records)
                     # These just contain a service as rrname and the hostname with the service name as rdata (to be confirmed)
@@ -94,9 +99,9 @@ class Parsers:
                     # This code adds the port to the device's list of open ports and also appends the name in rdata.
                     if rtype == 33:
                         try:
-                            srv_name = ans.rdata.decode().rstrip(".")
+                            srv_name = ans.target.decode().rstrip(".")
                         except Exception:
-                            srv_name = str(ans.rdata)
+                            srv_name = str(ans.target)
                         srv_port = ans.port
 
                         mdns_names.append(srv_name)
@@ -127,14 +132,19 @@ class Parsers:
                     
                         except Exception as e:
                             print(f"[!] Error parsing TXT field. {e}")
-                    
+                    print(service)
                     services.append(service)
+            
+            print("starting parsing")
 
-            for i in dns.ancount:
+            for i in range(dns.ancount):
+                print(dns.an[i])
                 parse_field(dns.an[i])
-            for i in dns.nscount:
+            for i in range(dns.nscount):
+                print(dns.ns[i])
                 parse_field(dns.ns[i])
-            for i in dns.arcount:
+            for i in range(dns.arcount):
+                print(dns.ar[i])
                 parse_field(dns.ar[i])
         
             for name in mdns_names:
@@ -142,113 +152,9 @@ class Parsers:
                     clean_hostname = name.split(":")[0].split(".", 1)[0]
 
             
-
+        print (mdns_names, services, notes, ports, clean_hostname)
         return mdns_names, services, notes, ports, clean_hostname
 
-    @staticmethod
-    def parse_mdns(packet):
-        """This method is deprecated and no longer interfaces with the rest of the modules. Use parse_mdns_services instead."""
-        dns = packet[DNS]
-        mdns = []
-        notes = []
-        ports = []
-        matched_services = set()
-        clean_hostname = None
-
-        if dns.qr == 1:
-            # Answers
-            def parse_answer(ans):
-                rtype = ans.type
-                try:
-                    rrname = ans.rrname.decode().rstrip('.')
-                except Exception:
-                    rrname = str(ans.rrname)
-                mdns.append(rrname)
-
-                # PTR
-                if rtype == 12:
-                    try:
-                        ptr = ans.rdata.decode().rstrip('.')
-                    except Exception:
-                        ptr = str(ans.rdata)
-                    mdns.append(ptr)
-
-                # SRV
-                elif rtype == 33:
-                    try:
-                        srv = ans.target.decode().rstrip('.')
-                        port = ans.port
-                        mdns.append(f"{srv}:{port}")
-                        ports.append(port)
-                    except Exception:
-                        port = ans.port
-                        srv = str(ans.target)
-                        mdns.append(f"{srv}:{port}")
-                        ports.append(port)
-                # TXT
-                elif rtype == 16:
-                    try:
-                        txt_pairs = []
-                        highlights = []
-                        for i in ans.rdata:
-                            if isinstance(i, bytes):
-                                i = i.decode(errors="replace")
-                            i = i.strip()
-                            if '=' in i:
-                                k, v = i.split('=', 1)
-                                k = k.strip().lower()
-                                v = v.strip()
-                                txt_pairs.append(f"    {k}: {v}")
-                                # Highlight common fields
-                                if k in ("model", "id", "deviceid", "fn", "product", "ty", "uuid", "md", "ver", "srcvers", "adminurl", "srvvers"):
-                                    highlights.append(f"      [*] {k}: {v}")
-                            else:
-                                txt_pairs.append(f"    {i}")
-                        if highlights:
-                            notes.append(f"  HIGHLIGHTS FOR {ans.rrname}:\n" + "\n".join(highlights))
-                        if txt_pairs:
-                            notes.append(f"  MDNS TXT RECORD FOR {ans.rrname}:\n" + "\n".join(txt_pairs))
-                    except Exception as e:
-                        print(f"[!] Error parsing TXT answer: {e}")
-                # AAAA
-                elif rtype == 28:
-                    try:
-                        ipv6 = "    IPv6 Address: "+ans.rdata.decode()
-                    except Exception:
-                        ipv6 = "    IPv6 Address: "+str(IPv6Address(ans.rdata))
-                    notes.append(ipv6)
-
-            # Answers
-            for i in range(dns.ancount):
-                parse_answer(dns.an[i])
-            # Authority
-            for i in range(dns.nscount):
-                parse_answer(dns.ns[i])
-            # Additional
-            for i in range(dns.arcount):
-                parse_answer(dns.ar[i])
-
-            for service in mdns:
-                service_lc = service.lower()
-                for key, label in SERVICE_DB.items():
-                    if key in service_lc and key not in matched_services:
-                        notes.append(f"    Service Running: {label} ({key})")
-                        matched_services.add(key)
-
-            # Extract clean hostname
-            for name in mdns:
-                if name.lower().endswith('.local') and not name.startswith('_'):
-                    is_service = False
-                    for key in SERVICE_DB:
-                        if name.lower() == key:
-                            is_service = True
-                            break
-                    if not is_service:
-                        clean_hostname = name.split(':')[0].split('.', 1)[0]
-                        break
-
-        return mdns, notes, ports, clean_hostname
-    
     @staticmethod
     def parse_nbns(packet):
         nbns = packet[NBNSHeader]
