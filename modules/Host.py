@@ -1,4 +1,7 @@
-from modules.databases.oui_dict import OUI_DICT
+try:
+    from modules.databases.oui_dict import OUI_DICT
+except ModuleNotFoundError:
+    from databases.oui_dict import OUI_DICT
 
 class Host:
     """
@@ -17,6 +20,7 @@ class Host:
         vendor: string object representing the vendor of the host, defaults to "N/A".
         notes: list of strings for any extra notes about the host, defaults to an empty list.
         packet_count: integer representing the number of packets seen from this host, defaults to 0.
+        services: services found that are likely running on the system.
 
     """
     def __init__(self, ip: str, mac: str, last_seen, hostname: str="N/A", nbns=None, mdns=None, ports=None):
@@ -27,6 +31,7 @@ class Host:
         self.mdns = mdns if mdns is not None else []
         self.ports = ports if ports is not None else []
         self.last_seen = last_seen
+        self.services = []
         self.notes = []
         self.packet_count = 0
 
@@ -39,6 +44,17 @@ class Host:
                 oui = mac_clean[:6]
                 return OUI_DICT.get(oui, "N/A")
         return "N/A"
+    
+    @property
+    def formatted_services(self):
+        return_list = []
+        for service in self.services:
+            return_list.append(f"""
+  {service.get("name")}
+    {"\n    ".join(service.get("metadata"))}
+""")
+
+        return return_list
 
     def info(self, output: bool=False):
         info = f"""
@@ -54,6 +70,8 @@ HOST INFORMATION FOR {self.ip}
   LAST SEEN:    {self.last_seen}
   PACKET COUNT: {self.packet_count}
 
+RUNNING SERVICES:
+  {"\n  ".join(self.formatted_services)}
 EXTRA NOTES AND INFO:
   {"\n".join(self.notes)}
 

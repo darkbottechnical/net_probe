@@ -29,9 +29,12 @@ from scapy.sendrecv import (
     send, 
     AsyncSniffer
 )
-
-from modules.parsers.packet_parsers import Parsers
-from modules.Host import Host
+try:
+    from modules.parsers.packet_parsers import Parsers
+    from modules.Host import Host
+except ModuleNotFoundError:
+    from parsers.packet_parsers import Parsers
+    from Host import Host
 
 class Probe:
     """
@@ -125,6 +128,25 @@ class Probe:
                 for p in host.ports:
                     if p not in host_exists.ports:
                         host_exists.ports.append(p)
+                existing_service = None
+                for s in host.services: # for every service in the new host's services,
+                    for es in host_exists.services: 
+                        if s.get("name") == es.get("name"): # compare its name to every service the existing host has
+                            existing_service = es.get("name") # if a service already exists with that name, 
+                            for md in s.get("metadata"): # for every piece of metadata in the new host
+                                key_exists = False
+                                for emd in es.get("metadata"): # compare it to all metadata in existing service
+                                    key, value = md.split(": ")
+                                    ekey, evalue = emd.split(": ")
+                                    if key == ekey: # if the keys are equal
+                                        key_exists = True
+                                        host_exists.services[host_exists.services.index(es)].get("metadata")[
+                                            host_exists.services[host_exists.services.index(es)].get("metadata").index(emd)
+                                        ] = f"{key}: {value}" # update the value
+                                    if key_exists == False : # if the new metadata's key doesnt already exist
+                                        host_exists.services[host_exists.services.index(es)].get("metadata").append(md) # add the metadata                 
+                    if not existing_service:
+                        host_exists.services.append(s)
                 for note in host.notes:
                     if note not in host_exists.notes:
                         host_exists.notes.append(note)
@@ -204,10 +226,11 @@ class Probe:
                 sender.nbns.extend(nbns)
 
             if packet.haslayer(DNS) and packet.haslayer(UDP) and (packet[UDP].sport == 5353 or packet[UDP].dport == 5353):
-                mdns, info, ports, clean_hostname = Parsers.parse_mdns(packet)
+                mdns, services, info, ports, clean_hostname = Parsers.parse_mdns_services(packet)
                 sender.mdns.extend(mdns)
                 sender.notes.extend(info)
                 sender.ports.extend(ports)
+                sender.services.extend(services)
 
                 # Update hostname only if clean_hostname is valid and sender.hostname is empty or "N/A"
                 if clean_hostname and (not sender.hostname or sender.hostname == "N/A"):
