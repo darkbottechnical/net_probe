@@ -43,7 +43,6 @@ class Parsers:
         clean_hostname = None
 
         if dns.qr == 1:
-            print("DEBUG: Parsing fields")
             def parse_field(ans):
                 """Function to extract information from a packet's DNS layer."""
                 try:
@@ -138,13 +137,10 @@ class Parsers:
             print("starting parsing")
 
             for i in range(dns.ancount):
-                print(dns.an[i])
                 parse_field(dns.an[i])
             for i in range(dns.nscount):
-                print(dns.ns[i])
                 parse_field(dns.ns[i])
             for i in range(dns.arcount):
-                print(dns.ar[i])
                 parse_field(dns.ar[i])
         
             for name in mdns_names:
@@ -152,7 +148,6 @@ class Parsers:
                     clean_hostname = name.split(":")[0].split(".", 1)[0]
 
             
-        print (mdns_names, services, notes, ports, clean_hostname)
         return mdns_names, services, notes, ports, clean_hostname
 
     @staticmethod
