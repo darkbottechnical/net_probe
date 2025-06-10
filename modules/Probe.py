@@ -29,9 +29,12 @@ from scapy.sendrecv import (
     send, 
     AsyncSniffer
 )
-
-from modules.parsers.packet_parsers import Parsers
-from modules.Host import Host
+try:
+    from modules.parsers.packet_parsers import Parsers
+    from modules.Host import Host
+except ModuleNotFoundError:
+    from parsers.packet_parsers import Parsers
+    from Host import Host
 
 class Probe:
     """
@@ -125,6 +128,19 @@ class Probe:
                 for p in host.ports:
                     if p not in host_exists.ports:
                         host_exists.ports.append(p)
+
+                for new_service in host.services:
+                    existing_service = next((s for s in host_exists.services if s.get("name") == new_service.get("name")), None)
+                    if existing_service:
+                        for metadata_pair in new_service.get("metadata", []):
+                            key, value = metadata_pair.split(": ")
+                            existing_metadata = next((m for m in existing_service.get("metadata", []) if m.split(": ")[0] == key), None)
+                            if existing_metadata:
+                                existing_service["metadata"].remove(existing_metadata)
+                            existing_service["metadata"].append(metadata_pair)
+                    else:
+                        host_exists.services.append(new_service)
+
                 for note in host.notes:
                     if note not in host_exists.notes:
                         host_exists.notes.append(note)
@@ -204,10 +220,11 @@ class Probe:
                 sender.nbns.extend(nbns)
 
             if packet.haslayer(DNS) and packet.haslayer(UDP) and (packet[UDP].sport == 5353 or packet[UDP].dport == 5353):
-                mdns, info, ports, clean_hostname = Parsers.parse_mdns(packet)
+                mdns, services, info, ports, clean_hostname = Parsers.parse_mdns_services(packet)
                 sender.mdns.extend(mdns)
                 sender.notes.extend(info)
                 sender.ports.extend(ports)
+                sender.services.extend(services)
 
                 # Update hostname only if clean_hostname is valid and sender.hostname is empty or "N/A"
                 if clean_hostname and (not sender.hostname or sender.hostname == "N/A"):
@@ -226,7 +243,8 @@ class Probe:
                     self._host_index[receiver.ip].packet_count += 1
 
         def _submit_process_packet(p):
-            self.packet_processors.submit(process_packet, p)
+            #self.packet_processors.submit(process_packet, p)
+            Thread(target=process_packet, args=[p], daemon=True).start()
         
         print(f"[+] Starting passive scanner on for range {self.range} at aggression level {self.aggrlv}.")
         sniffer_args = {
