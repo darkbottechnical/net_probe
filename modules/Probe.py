@@ -133,17 +133,26 @@ class Probe:
                     existing_service = next((s for s in host_exists.services if s.get("name") == new_service.get("name")), None)
                     if existing_service:
                         for metadata_pair in new_service.get("metadata", []):
-                            key, value = metadata_pair.split(": ")
-                            existing_metadata = next((m for m in existing_service.get("metadata", []) if m.split(": ")[0] == key), None)
-                            if existing_metadata:
-                                existing_service["metadata"].remove(existing_metadata)
-                            existing_service["metadata"].append(metadata_pair)
+                            if ": " in metadata_pair:
+                                key, value = metadata_pair.split(": ", 1)  # Split into at most two parts
+                                existing_metadata = next((m for m in existing_service.get("metadata", []) if m.split(": ")[0] == key), None)
+                                if existing_metadata:
+                                    existing_service["metadata"].remove(existing_metadata)
+                                existing_service["metadata"].append(metadata_pair)
+                            else:
+                                # Handle cases where the metadata_pair does not contain ": "
+                                existing_service["metadata"].append(metadata_pair)
                     else:
                         host_exists.services.append(new_service)
 
                 for note in host.notes:
-                    if note not in host_exists.notes:
-                        host_exists.notes.append(note)
+                    if ": " in note:
+                        parts = note.split(": ", 1)  # Split into at most two parts
+                        key, value = parts[0], parts[1]
+                        if key and value:
+                            # Process the key-value pair as needed
+                            pass
+
                 host_exists.last_seen = host.last_seen
             
     def nbns_probe(self):

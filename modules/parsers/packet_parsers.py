@@ -46,12 +46,17 @@ class Parsers:
             def parse_field(ans):
                 """Function to extract information from a packet's DNS layer."""
                 try:
-                    rrname = ans.rrname.decode().rstrip(".")
+                    rrname = ans.rrname.decode().rstrip(".") if hasattr(ans, 'rrname') else None
                 except Exception:
-                    rrname = str(ans.rrname)
-                mdns_names.append(rrname) # always add rrname to mdns_names list
+                    rrname = str(ans.rrname) if hasattr(ans, 'rrname') else None
 
-                rtype = ans.type
+                if rrname:
+                    mdns_names.append(rrname)  # always add rrname to mdns_names list
+
+                rtype = getattr(ans, 'type', None)
+                if rtype is None:
+                    notes.append("[!] Warning: Missing 'type' attribute in DNS answer.")
+                    return
 
                 # if the record is an AAAA record, it won't be a service, so just make note of the ipv6 address
                 if rtype == 28:
@@ -79,7 +84,7 @@ class Parsers:
                         if name in rrname:
                             is_known_service: bool = True # if it is, set the boolean to true,
                             service["name"] = data.get("fn") # set the service name to the stored friendly name (fn)
-                            service_attr_data = data # and store the known friendly metadata keys.
+                            service_attr_data = data.get("ca") # and store the known friendly metadata keys.
 
                     # PTR (Pointer Records)
                     # These just contain a service as rrname and the hostname with the service name as rdata (to be confirmed)
@@ -113,31 +118,34 @@ class Parsers:
 
                         try:
                             txt_records = ans.rdata
-                    
-                            for pair in txt_records:
-                                if isinstance(pair, bytes):
-                                    pair = pair.decode()
-                                pair = pair.strip()
-                                key, value = pair.split("=", 1) # split each pair
-
-                                if is_known_service: # if the service is a known service,
-                                    key_fn = service_attr_data.get(key) # attempt to translate the pair's kay to a friendly key.
-                                    if key_fn is not None:
-                                        key = key_fn
-
-                                service.get("metadata").append(f"{key}: {value}") # add pair to metadata.
-                    
+                            for record in txt_records:
+                                if isinstance(record, bytes):
+                                    record = record.decode(errors="replace")
+                                record = record.strip()
+                                if "=" in record:
+                                    key, value = record.split("=", 1)
+                                    key = key.strip()
+                                    value = value.strip()
+                                    # Replace key with friendly name if available
+                                    if service_attr_data and key in service_attr_data:
+                                        key = service_attr_data[key]
+                                    metadata.append(f"{key}: {value}")
+                                else:
+                                    metadata.append(record)
                         except Exception as e:
-                            print(f"[!] Error parsing TXT field. {e}")  
+                            notes.append(f"[!] Error parsing TXT field: {e}")
+
+                        service["metadata"].extend(metadata)
                     services.append(service)
             
 
             for i in range(dns.ancount):
-                parse_field(dns.an[i])
-            for i in range(dns.nscount):
-                parse_field(dns.ns[i])
+                if i < len(dns.an):  # Ensure index is within bounds
+                    parse_field(dns.an[i])
+
             for i in range(dns.arcount):
-                parse_field(dns.ar[i])
+                if i < len(dns.ar):  # Ensure index is within bounds
+                    parse_field(dns.ar[i])
         
             for name in mdns_names:
                 if name.lower().endswith(".local") and not name.startswith("_"):

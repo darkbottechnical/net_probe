@@ -23,6 +23,8 @@ class Host:
         services: services found that are likely running on the system.
 
     """
+    __slots__ = ["ip", "mac", "hostname", "nbns", "mdns", "ports", "last_seen", "services", "notes", "packet_count", "_vendor"]
+
     def __init__(self, ip: str, mac: str, last_seen, hostname: str="N/A", nbns=None, mdns=None, ports=None):
         self.ip = ip
         self.mac = mac
@@ -34,32 +36,23 @@ class Host:
         self.services = []
         self.notes = []
         self.packet_count = 0
+        self._vendor = None  # Cache for vendor property
 
     @property
     def vendor(self):
-        if self.mac:
+        if self._vendor is None and self.mac:
             import re
             mac_clean = re.sub(r'[^0-9A-Fa-f]', '', self.mac).upper()
             if len(mac_clean) >= 6:
                 oui = mac_clean[:6]
-                return OUI_DICT.get(oui, "N/A")
-        return "N/A"
+                self._vendor = OUI_DICT.get(oui, "N/A")
+            else:
+                self._vendor = "N/A"
+        return self._vendor
 
     @property
     def formatted_services(self):
-        return_list = []
-        for service in self.services:
-            metadata = service.get("metadata", [])
-            if metadata:
-                formatted_metadata = "\n    ".join(metadata)
-            else:
-                formatted_metadata = "No metadata available"
-            return_list.append(f"""
-  {service.get("name", "Unknown Service")}
-    {formatted_metadata}
-""")
-
-        return return_list
+        return (f"\n  {service.get('name', 'Unknown Service')}\n    " + "\n    ".join(service.get("metadata", ["No metadata available"])) for service in self.services)
 
     def info(self, output: bool=False):
         info = f"""
