@@ -105,61 +105,53 @@ SERVICE_DB = {
             "note": "Notes"
         }
     },
+    "_device-info": {
+        "fn": "Device Info",
+        "oss": [],
+        "ca": {
+            "model": "Device Model",
+            "osxvers": "MacOSX Version"
+        }
+    },
     "_homekit": {
         "fn": "Apple Homekit",
         "oss": [],
-        "ca": {
-            
-        }
+        "ca": {}
     },
     "_ssh": {
         "fn": "Secure Shell Server",
         "oss": [],
-        "ca": {
-            
-        }
+        "ca": {}
     },
     "_smb": {
         "fn": "Windows File Sharing (Server Message Block)",
         "oss": [],
-        "ca": {
-            
-        }
+        "ca": {}
     },
     "_afpovertcp": {
         "fn": "Apple File Sharing over TCP",
         "oss": [],
-        "ca": {
-            
-        }
+        "ca": {}
     },
     "_workstation": {
         "fn": "Workstation Prescence",
         "oss": [],
-        "ca": {
-            
-        }
+        "ca": {}
     },
     "_http": {
         "fn": "Hypertext Transfer Protocol",
         "oss": [],
-        "ca": {
-            
-        }
+        "ca": {}
     },
     "_ftp": {
         "fn": "File Transfer Protocol",
         "oss": [],
-        "ca": {
-            
-        }
+        "ca": {}
     },
     "_hap": {
         "fn": "HomeKit Accessory Protocol",
         "oss": [],
-        "ca": {
-            
-        }
+        "ca": {}
     },
     "_services._dns-sd": {
         "fn": "mDNS Service Discovery",

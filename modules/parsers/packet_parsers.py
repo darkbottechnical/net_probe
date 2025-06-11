@@ -162,10 +162,16 @@ class Parsers:
 
         if packet.haslayer(NBNSRegistrationRequest):
             nsbody = packet[NBNSRegistrationRequest]
-            if nsbody.QUESTION_NAME and nsbody.QUESTION_NAME.decode() is not None:
-                names.extend([nsbody.QUESTION_NAME.decode()])
+            if nsbody.QUESTION_NAME is not None:
+                try:
+                    names.append(nsbody.QUESTION_NAME.decode())
+                except UnicodeDecodeError:
+                    names.append(str(nsbody.QUESTION_NAME))
             elif hasattr(nbns, 'OPCODE') and nbns.OPCODE in [0, 5]:
                 if hasattr(nbns, 'RR_NAME') and nbns.RR_NAME:
-                    names.extend([nbns.RR_NAME.decode()])
+                    try:
+                        names.append(nbns.RR_NAME.decode())
+                    except UnicodeDecodeError:
+                        names.append(str(nbns.RR_NAME))
 
         return names
